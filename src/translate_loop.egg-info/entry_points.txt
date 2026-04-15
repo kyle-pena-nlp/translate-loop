@@ -1,0 +1,2 @@
+[console_scripts]
+t = translate_loop.cli:main

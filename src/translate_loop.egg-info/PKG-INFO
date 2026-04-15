@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: translate-loop
+Version: 0.1.0
+Summary: Round-trip translator CLI using free Google Translate
+Author-email: Kyle Pena <kyle@gator.so>
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: deep-translator>=1.11.4
+Requires-Dist: pyperclip>=1.8.2
+
 # translate-loop (`t`)
 
 Round-trip translator CLI. Installs a `t` command via pipx.

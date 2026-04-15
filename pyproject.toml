@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "translate-loop"
+version = "0.1.0"
+description = "Round-trip translator CLI using free Google Translate"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Kyle Pena", email = "kyle@gator.so" }]
+dependencies = [
+    "deep-translator>=1.11.4",
+    "pyperclip>=1.8.2",
+]
+
+[project.scripts]
+t = "translate_loop.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

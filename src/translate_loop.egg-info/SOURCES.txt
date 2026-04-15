@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/translate_loop/__init__.py
+src/translate_loop/cli.py
+src/translate_loop.egg-info/PKG-INFO
+src/translate_loop.egg-info/SOURCES.txt
+src/translate_loop.egg-info/dependency_links.txt
+src/translate_loop.egg-info/entry_points.txt
+src/translate_loop.egg-info/requires.txt
+src/translate_loop.egg-info/top_level.txt
