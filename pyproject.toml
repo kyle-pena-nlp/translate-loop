@@ -12,6 +12,8 @@ authors = [{ name = "Kyle Pena", email = "kyle@gator.so" }]
 dependencies = [
     "deep-translator>=1.11.4",
     "pyperclip>=1.8.2",
+    "SpeechRecognition>=3.10.0",
+    "PyAudio>=0.2.13",
 ]
 
 [project.scripts]

@@ -7,22 +7,52 @@ Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 Requires-Dist: deep-translator>=1.11.4
 Requires-Dist: pyperclip>=1.8.2
+Requires-Dist: SpeechRecognition>=3.10.0
+Requires-Dist: PyAudio>=0.2.13
 
 # translate-loop (`t`)
 
-Round-trip translator CLI. Installs a `t` command via pipx.
+A small CLI for translating text, round-tripping it through another language,
+capturing speech from your mic, and speaking results out loud. Installs a
+single `t` command via pipx.
 
 ## Install
 
 ```sh
-pipx install .
+./install.sh
 ```
 
-On first run, `t` creates `~/.config/t/config.json`:
+The script checks for `pipx` (and, on macOS, warns if `portaudio` is missing,
+which is required for microphone capture), then runs `pipx install . --force`.
+
+Manual install:
+
+```sh
+brew install pipx portaudio          # macOS; portaudio needed for `capture`
+pipx install . --force
+```
+
+## Quick Example
+
+Translate whatever you say in your microphone and say it out loud in the target language (`config.json`):
+`t -t capture --say`
+
+Translate whatever is copied into your buffer and say it out loud
+
+## Configuration
+
+On first run, `t` creates a global config at `~/.config/t/config.json`:
 
 ```json
 { "from": "english", "to": "russian" }
 ```
+
+Precedence (later wins):
+
+1. built-in defaults
+2. global `~/.config/t/config.json`
+3. local `./config.json` in the current directory (only keys you want to override)
+4. `--from` / `--to` command-line flags
 
 ## Usage
 
@@ -31,28 +61,81 @@ t <text>
 t --from <lang> <text>
 t --to <lang> <text>
 t --from <lang> --to <lang> <text>
-t -t <text>                # one-way: translate into 'from' language only
-t --out ./result.txt <text>
+t -t <text>                 # one-way mode (see below)
+t --out <path> <text>       # also write result to file/dir
+t --say <text>              # speak the result via macOS `say`
 ```
 
-`<text>` may be:
+### `<text>` forms
 
-- the literal word `buffer` — reads from the system clipboard
-- a filepath (auto-detected) — reads the file contents
-- anything else — treated as literal text
+`<text>` (a single token) is interpreted as:
 
-### Default behavior (round-trip)
+- `buffer` → reads from the system clipboard
+- `capture` → records from your microphone until you press Enter in the terminal,
+  then transcribes via Google Web Speech using the `from` language
+- a filepath (auto-detected; `./`, `../`, `/`, `~/` prefixes or an existing file)
+  → reads the file contents
+- anything else → literal text
 
-Translates `to → from`, then back `from → to`, and prints the result.
+Multiple tokens are always treated as literal text.
 
-### `-t` mode
+### Modes
 
-Skips the second hop and prints the text in the `from` language.
+**Default — round trip.** Translates `from → to → from` and prints the result
+in the `from` language. This exposes translation drift (the "translate loop").
+
+**`-t` — one way.** Translates `from → to` and prints the result in the `to`
+language.
 
 ### `--out <path>`
 
-Also writes the result to the given path (or `<dir>/t_output.txt` if a
-directory).
+Writes the printed result to the given path. If `<path>` is an existing
+directory, writes to `<path>/t_output.txt`. Stdout still gets the result.
 
-Translation backend: free Google Translate via
-[`deep-translator`](https://pypi.org/project/deep-translator/).
+### `--say`
+
+Pipes the result through macOS `say`, choosing a voice based on the result's
+language (the `from` language in loop mode, `to` in `-t` mode). Falls back to
+the system default voice if no mapping exists.
+
+## Examples
+
+Round-trip your clipboard through Russian and back to English:
+
+```sh
+t buffer
+```
+
+Speak a spoken English phrase as Russian:
+
+```sh
+t -t capture --say
+```
+
+Translate a file one-way into Spanish and save it:
+
+```sh
+t --to spanish -t ./notes.txt --out ./notes.es.txt
+```
+
+Override languages per-project with a local `config.json`:
+
+```json
+{ "from": "english", "to": "japanese" }
+```
+
+## How it works
+
+- Translation: free Google Translate via
+  [`deep-translator`](https://pypi.org/project/deep-translator/).
+- Speech recognition: Google Web Speech via
+  [`SpeechRecognition`](https://pypi.org/project/SpeechRecognition/) +
+  [`PyAudio`](https://pypi.org/project/PyAudio/).
+- Text-to-speech: macOS `say` (built-in, offline).
+- Clipboard: [`pyperclip`](https://pypi.org/project/pyperclip/).
+
+## Platform notes
+
+`--say` and the default voice map target macOS. Everything else is
+cross-platform, but microphone capture requires PortAudio (`brew install
+portaudio` on macOS, `apt install portaudio19-dev` on Debian/Ubuntu).

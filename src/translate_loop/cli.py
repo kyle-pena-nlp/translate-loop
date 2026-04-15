@@ -4,10 +4,47 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 from deep_translator import GoogleTranslator
 import pyperclip
+
+# BCP-47 codes for Google Web Speech (used by `capture`).
+RECOGNIZE_CODES = {
+    "english": "en-US",
+    "russian": "ru-RU",
+    "spanish": "es-ES",
+    "french": "fr-FR",
+    "german": "de-DE",
+    "italian": "it-IT",
+    "portuguese": "pt-PT",
+    "dutch": "nl-NL",
+    "polish": "pl-PL",
+    "turkish": "tr-TR",
+    "arabic": "ar-SA",
+    "hindi": "hi-IN",
+    "japanese": "ja-JP",
+    "korean": "ko-KR",
+    "chinese": "zh-CN",
+    "chinese (simplified)": "zh-CN",
+    "chinese (traditional)": "zh-TW",
+    "swedish": "sv-SE",
+    "norwegian": "nb-NO",
+    "danish": "da-DK",
+    "finnish": "fi-FI",
+    "greek": "el-GR",
+    "czech": "cs-CZ",
+    "hungarian": "hu-HU",
+    "romanian": "ro-RO",
+    "slovak": "sk-SK",
+    "thai": "th-TH",
+    "hebrew": "he-IL",
+    "indonesian": "id-ID",
+    "malay": "ms-MY",
+    "ukrainian": "uk-UA",
+    "vietnamese": "vi-VN",
+}
 
 # macOS `say` voices by language name.
 SAY_VOICES = {
@@ -60,20 +97,28 @@ def say(text: str, lang: str) -> None:
     subprocess.run(cmd, check=False)
 
 CONFIG_PATH = Path.home() / ".config" / "t" / "config.json"
+LOCAL_CONFIG_NAME = "config.json"
 DEFAULT_CONFIG = {"from": "english", "to": "russian"}
+
+
+def _load_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def ensure_config() -> dict:
     if not CONFIG_PATH.exists():
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, indent=2))
-        return dict(DEFAULT_CONFIG)
-    try:
-        cfg = json.loads(CONFIG_PATH.read_text())
-    except json.JSONDecodeError:
-        cfg = {}
+
     merged = dict(DEFAULT_CONFIG)
-    merged.update({k: v for k, v in cfg.items() if k in ("from", "to")})
+    for src in (CONFIG_PATH, Path.cwd() / LOCAL_CONFIG_NAME):
+        if src.exists():
+            cfg = _load_json(src)
+            merged.update({k: v for k, v in cfg.items() if k in ("from", "to")})
     return merged
 
 
@@ -88,9 +133,56 @@ def looks_like_path(s: str) -> bool:
     return False
 
 
-def resolve_text(token: str) -> str:
+def capture_from_mic(lang: str) -> str:
+    import pyaudio
+    import speech_recognition as sr
+
+    rate = 16000
+    chunk = 1024
+    pa = pyaudio.PyAudio()
+    stream = pa.open(
+        format=pyaudio.paInt16, channels=1, rate=rate,
+        input=True, frames_per_buffer=chunk,
+    )
+    frames = []
+    stop = threading.Event()
+
+    def record():
+        while not stop.is_set():
+            frames.append(stream.read(chunk, exception_on_overflow=False))
+
+    t = threading.Thread(target=record, daemon=True)
+    t.start()
+    try:
+        input(f"[capture: recording in {lang}... press Enter to stop] ")
+    finally:
+        stop.set()
+        t.join()
+        stream.stop_stream()
+        stream.close()
+        pa.terminate()
+
+    if not frames:
+        return ""
+
+    audio = sr.AudioData(b"".join(frames), rate, 2)
+    r = sr.Recognizer()
+    code = RECOGNIZE_CODES.get(lang.strip().lower(), "en-US")
+    try:
+        return r.recognize_google(audio, language=code)
+    except sr.UnknownValueError:
+        print("[capture: could not understand audio]", file=sys.stderr)
+        return ""
+    except sr.RequestError as e:
+        print(f"[capture: recognition request failed: {e}]", file=sys.stderr)
+        return ""
+
+
+def resolve_text(token: str, src_lang: str) -> str:
     if token == "buffer":
         return pyperclip.paste()
+    if token == "capture":
+        return capture_from_mic(src_lang)
     if looks_like_path(token):
         expanded = os.path.expanduser(token)
         if os.path.isfile(expanded):
@@ -130,11 +222,15 @@ def main(argv=None) -> int:
     dst_lang = args.dst or cfg["to"]
 
     raw = " ".join(args.text)
-    # Only treat a single token as buffer/path; multi-token is always literal.
+    # Only treat a single token as buffer/capture/path; multi-token is always literal.
     if len(args.text) == 1:
-        text = resolve_text(args.text[0])
+        text = resolve_text(args.text[0], src_lang)
     else:
         text = raw
+
+    if not text.strip():
+        print("[no input text]", file=sys.stderr)
+        return 1
 
     if args.one_way:
         # Single hop into the 'to' language.
