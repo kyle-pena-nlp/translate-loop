@@ -20,6 +20,8 @@ brew install pipx portaudio          # macOS; portaudio needed for `capture`
 pipx install . --force
 ```
 
+Follow the instructions included to set up audio devices so you can use it directly in a meeting.
+
 ## Quick Example
 
 Translate whatever you say in your microphone and say it out loud in the target language (`config.json`):
